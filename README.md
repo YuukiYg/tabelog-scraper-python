@@ -1,4 +1,4 @@
-# tabelog-extractor-python
+# tabelog-scraper-python
 
 食べログのURLから、お店の情報を抽出するプログラム。
 
