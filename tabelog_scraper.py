@@ -3,6 +3,7 @@ import sys
 import time
 import requests
 from bs4 import BeautifulSoup
+import restaurant 
 
 class TabelogScraper():
     def __init__(self):
@@ -12,69 +13,72 @@ class TabelogScraper():
         if element is not None:
             return element.text.strip()
         else:
-            return element
+            return "-"
 
     def scrape(self, url):
+        rest = restaurant.Restaurant()
+        rest.url = url
+        
         # htmlの抽出
         try:
             response = requests.get(url)
             response.encoding = response.apparent_encoding
             bs = BeautifulSoup(response.text, 'html.parser')
         except:
-            print("Error occured when extracting html from url: " + url)
-            return "ERROR. URL=" + url
-           
+            print("Error occured when extracting html from , from " + url)
+            return rest # htmlが抽出できないとそれ以上解析ができないため、ここで終了する。
+        
         # 店名の取得
         try:
             restaurant_name = self.__extract_text(bs.find(class_='display-name').find('span'))
+            rest.name = restaurant_name
         except:
-            print("Error occured when extracting restaurant name")
-            return "ERROR. URL=" + url
+            print("Error occured when extracting restaurant name, from " + url)
 
         # ジャンルの取得（ジャンルは複数あるが、一番最初に出てきたジャンルを抽出することにする）
         try:
-            subinfo_items = bs.find(class_='rdheader-info-data').findAll('dl', {'class':'rdheader-subinfo__item'})
-            for item in subinfo_items:
-                dt_tag = self.__extract_text(item.find('dt', {'class':'rdheader-subinfo__item-title'}))
+            # dtタグの値が 'ジャンル：' であるdlタグを探し、
+            # そのdlタグ内で、実際のジャンル名が書かれているタグ(class名が'linktree__parent-target-text')を抽出する。
+            target_dl_tags = bs.find(class_='rdheader-info-data').findAll('dl', {'class':'rdheader-subinfo__item'})
+            for dl_tag in target_dl_tags:
+                dt_tag = self.__extract_text(dl_tag.find('dt', {'class':'rdheader-subinfo__item-title'}))
                 genre = ""
                 if dt_tag == u'ジャンル：':
-                    genre = self.__extract_text(item.find(class_='linktree__parent-target-text'))
+                    genre = self.__extract_text(dl_tag.find(class_='linktree__parent-target-text'))
                     break
+            rest.genre = genre
         except:
-            print("Error occured when extracting genre")
-            return "ERROR. URL=" + url
-
+            print("Error occured when extracting genre, from " + url)
 
         # 食べログスコアの取得
         try:
             score = self.__extract_text(bs.find(class_='rdheader-rating__score-val-dtl'))
+            rest.score = score
         except:
-            print("Error occured when extracting score")
-            return "ERROR. URL=" + url
+            print("Error occured when extracting score, from " + url)
 
         # 夜の予算
         try:
             dinner_budget = self.__extract_text(bs.find(class_='gly-b-dinner'))
+            rest.dinner_budget = dinner_budget
         except:
-            print("Error occured when extracting dinner budget")
-            return "ERROR. URL=" + url
+            print("Error occured when extracting dinner budget, from " + url)
     
         # 昼の予算
         try:
             lunch_budget = self.__extract_text(bs.find(class_='gly-b-lunch'))
+            rest.lunch_budget = lunch_budget
         except:
-            print("Error occured when extracting lunch budget")
-            return "ERROR. URL=" + url
+            print("Error occured when extracting lunch budget, from " + url)
 
         # 所在地
         try:
             address = self.__extract_text(bs.find(class_='rstinfo-table__address'))
+            rest.address = address
         except:
-            print("Error occured when extracting address")
-            return "ERROR. URL=" + url
+            print("Error occured when extracting address, from " + url)
 
-        # 結果の表示
-        print(restaurant_name + "\t" + genre + "\t" + score + "\t" + dinner_budget + "\t" + lunch_budget + "\t" + address + "\t" + url)
+        return rest
 
 
 # Main処理
@@ -88,9 +92,18 @@ else:
 with open(path) as file:
     urls = file.readlines()
 
-# 結果の表示
-print("名称" + "\t" + "ジャンル" + "\t" + "スコア" + "\t" + "夜の予算" + "\t" + "昼の予算" + "\t" + "所在地" + "\t" + "URL")
+restaurant_list = []
+
+# スクレイピングの呼び出し
 for url in urls:
     url = url.rstrip() #末尾の改行を取る
-    TabelogScraper().scrape(url)
+    extracted_restaurant_info = TabelogScraper().scrape(url)
+    restaurant_list.append(extracted_restaurant_info)
+    
+    print("解析完了:"+url)
     time.sleep(1)
+
+# 結果の表示
+print("名称" + "\t" + "ジャンル" + "\t" + "スコア" + "\t" + "夜の予算" + "\t" + "昼の予算" + "\t" + "所在地" + "\t" + "URL")
+for r in restaurant_list:
+        print(r.name + "\t" + r.genre + "\t" + r.score + "\t" + r.dinner_budget + "\t" + r.lunch_budget + "\t" + r.address + "\t" + r.url)
